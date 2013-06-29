@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <numeric>
 #include <memory.h>
+#include <unordered_map>
+#include <unordered_set>
 
 using std::cerr;
 using std::cin;
@@ -209,13 +211,10 @@ public:
     this->capacity = capacity;
     this->items.assign(items.begin(), items.end());
     this->bestTotalValue = bestTotalValue;
-  }
-
-  KnapsackSolver(int capacity, const vector<Item>& items): 
-    capacity(capacity), 
-    items(items),
-    bestTotalValue(0)
-  {
+    for (int i = 0; i < items.size(); ++i)
+    {
+      idToItem[items[i].id] = items[i];
+    }
   }
 
   virtual ~KnapsackSolver()
@@ -226,20 +225,41 @@ public:
 
   virtual int solve(vector<int>* takenList) = 0;
 
+  void filterItems(const vector<int> takenList)
+  {
+    std::unordered_set<int> takenItemsSet;
+    for (const int id : takenList)
+    {
+      capacity -= idToItem[id].weight;
+      takenItemsSet.insert(id);
+    }
+    vector<Item> nextItems;
+    for (int i = 0; i < items.size(); ++i)
+    {
+      if (takenItemsSet.find(items[i].id) != takenItemsSet.end())
+      {
+        continue;
+      }
+      if (items[i].weight <= capacity)
+      {
+        nextItems.push_back(items[i]);
+      }
+    }
+    items = nextItems;
+  }
+
 protected:
   int capacity;
   vector<Item> items;
   int bestTotalValue;
+  std::unordered_map<int, Item> idToItem;
 };
 
 class DynamicProgrammingKnapsackSolver : public KnapsackSolver
 {
 public:
-  DynamicProgrammingKnapsackSolver() {}
-
-  DynamicProgrammingKnapsackSolver(int capacity, const vector<Item>& items): KnapsackSolver(capacity, items)
-  {
-  }
+  DynamicProgrammingKnapsackSolver(int maxAllowedProblemSize = DEFAULT_MAX_ALLOWED_PROBLEM_SIZE):
+    maxAllowedProblemSize(maxAllowedProblemSize) {}
 
   virtual string name() { return "DynamicProgrammingKnapsackSolver"; }
 
@@ -250,16 +270,32 @@ public:
       return 0;
     }
 
+    takenList->clear();
     int allowedItemsNumber = items.size();
-    if (capacity * 1ll * items.size() > MAX_ALLOWED_PROBLEM_SIZE)
+    if (capacity * 1ll * items.size() > maxAllowedProblemSize)
     {
-      allowedItemsNumber = MAX_ALLOWED_PROBLEM_SIZE / capacity;
+      allowedItemsNumber = maxAllowedProblemSize / capacity;
     }
 
+    cerr << "Max allowed problem size: " << maxAllowedProblemSize << endl;
     cerr << "Allowed items number: " << allowedItemsNumber << endl;
 
-    return solve(capacity, allowedItemsNumber, takenList);
+    int totalValue = solve(capacity, allowedItemsNumber, takenList);
+
+    filterItems(*takenList);
+
+    if (items.size() != 0)
+    {
+      std::vector<int> nextTakenList;
+      totalValue += solve(&nextTakenList);
+      for (int id : nextTakenList)
+      {
+        takenList->push_back(id);
+      }
+    }
+    return totalValue;
   }
+  static const int DEFAULT_MAX_ALLOWED_PROBLEM_SIZE = 300000000;
 
 private:
   int solve(int capacity, int itemsNumber, vector<int>* takenList)
@@ -289,8 +325,7 @@ private:
     int currentItem = itemsNumber;
     for (int i = 0; i < itemsNumber; ++i)
     {
-      if (bestPickValues[currentItem][currentCapacity] != bestPickValues[currentItem - 1][currentCapacity])
-      {
+      if (bestPickValues[currentItem][currentCapacity] != bestPickValues[currentItem - 1][currentCapacity]) {
         takenList->push_back(items[currentItem - 1].id);
         currentCapacity -= items[currentItem - 1].weight;
       }
@@ -300,17 +335,13 @@ private:
     return bestPickValues[itemsNumber][capacity];
   }
 
-  const int MAX_ALLOWED_PROBLEM_SIZE = 100000000;
+  int maxAllowedProblemSize = DEFAULT_MAX_ALLOWED_PROBLEM_SIZE;
 };
 
 class GreedyKnapsackSolver : public KnapsackSolver
 {
 public:
   GreedyKnapsackSolver() {}
-
-  GreedyKnapsackSolver(int capacity, const vector<Item>& items): KnapsackSolver(capacity, items)
-  {
-  }
 
   virtual string name() { return "GreedyKnapsackSolver"; }
 
@@ -330,15 +361,66 @@ public:
   }
 };
 
+class SplitKnapsackSolver : public KnapsackSolver
+{
+public:
+  SplitKnapsackSolver(int splitsNumber = 2): splitsNumber(splitsNumber) {}
+
+  virtual string name() { return "SplitKnapsackSolver"; }
+
+  int solve(vector<int>* takenList)
+  {
+    int itemsLeft = items.size();
+    int splitsLeft = splitsNumber;
+    int nextItemPosition = 0;
+    int totalValue = 0;
+    for (int i = 0; i < splitsNumber; ++i)
+    {
+      int splitSize = itemsLeft / splitsLeft;
+      --splitsLeft;
+      itemsLeft -= splitSize;
+
+      vector<Item> splitItems(items.begin() + nextItemPosition, 
+                              items.begin() + nextItemPosition + splitSize);
+  
+      nextItemPosition += splitSize;
+      sort(splitItems.begin(), splitItems.end(), compareByValuePerWeight);
+
+      DynamicProgrammingKnapsackSolver 
+        solver(DynamicProgrammingKnapsackSolver::DEFAULT_MAX_ALLOWED_PROBLEM_SIZE / splitsNumber);
+      solver.init(capacity / splitsNumber, splitItems, bestTotalValue);
+      vector<int> solverTakenList;
+      totalValue += solver.solve(&solverTakenList);
+      for (int id : solverTakenList)
+      {
+        takenList->push_back(id);
+      }
+    }
+
+    filterItems(*takenList);
+    sort(items.begin(), items.end(), compareByValuePerWeight);
+
+    if (items.size() != 0)
+    {
+      std::vector<int> nextTakenList;
+      DynamicProgrammingKnapsackSolver solver;
+      solver.init(capacity, items, bestTotalValue);
+      totalValue += solver.solve(&nextTakenList);
+      for (int id : nextTakenList)
+      {
+        takenList->push_back(id);
+      }
+    }
+    return totalValue;
+  }
+private:
+  int splitsNumber;
+};
+
 class BranchAndBoundKnapsackSolver : public KnapsackSolver
 {
 public:
   BranchAndBoundKnapsackSolver(): currentIteration(0) {}
-
-  BranchAndBoundKnapsackSolver(int capacity, const vector<Item>& items): KnapsackSolver(capacity, items),
-    currentIteration(0)
-  {
-  }
 
   virtual string name() { return "BranchAndBoundKnapsackSolver"; }
 
@@ -450,25 +532,28 @@ void findBestAnswer(int capacity, const vector<Item>& items, vector<int>* takenL
 
   solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
   solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new SortItemsByValuePreprocessor));
-  for (int i = 0; i < 10; ++i)
-  {
-    solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new RandomShuffleItemsPreprocessor));
-  }
+  // for (int i = 0; i < 10; ++i)
+  // {
+  //   solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new RandomShuffleItemsPreprocessor));
+  // }
 
   solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
-  solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new SortItemsByValuePreprocessor));
-  for (int i = 0; i < 10; ++i)
-  {
-    solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new RandomShuffleItemsPreprocessor));
-  }
+  /* solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new SortItemsByValuePreprocessor)); */
+  /* solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new RandomShuffleItemsPreprocessor)); */
+  // for (int i = 0; i < 10; ++i)
+  // {
+  //   solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new RandomShuffleItemsPreprocessor));
+  // }
 
-  solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
-  solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePreprocessor));
-  solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByWeightPreprocessor));
-  for (int i = 0; i < 10; ++i)
-  {
-    solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new RandomShuffleItemsPreprocessor));
-  }
+  // solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
+  // solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePreprocessor));
+  // solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByWeightPreprocessor));
+  // for (int i = 0; i < 10; ++i)
+  // {
+  //   solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new RandomShuffleItemsPreprocessor));
+  // }
+
+  solverPairs.push_back(std::make_pair(new SplitKnapsackSolver(2), new RandomShuffleItemsPreprocessor));
 
   int bestTotalValue = 0;
   for (int i = 0; i < solverPairs.size(); ++i)
