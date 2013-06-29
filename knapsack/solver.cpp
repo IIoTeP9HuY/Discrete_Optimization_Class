@@ -426,11 +426,13 @@ public:
 
   int solve(vector<int>* takenList)
   {
-    bestDensity = calculateBestDensity(capacity);
+    sortedItems = items;
+    sort(sortedItems.begin(), sortedItems.end(), compareByValuePerWeight);
     vector<int> currentTakenList;
-    cerr << "Best density: " << bestDensity << endl;
-    cerr << "Best value: " << bestDensity * capacity << endl;
-    solve(capacity, 0, 0, bestDensity * capacity, &currentTakenList, takenList);
+    takenList->clear();
+    double bestEstimation = calculateBestEstimation(capacity);
+    cerr << "Best estimation: " << bestEstimation << endl;
+    solve(capacity, 0, 0, bestEstimation, &currentTakenList, takenList);
     if (takenList->size() == 0)
     {
       return 0;
@@ -442,28 +444,30 @@ public:
   }
 private:
 
-  double calculateBestDensity(int currentCapacity)
+  vector<Item> sortedItems;
+  std::unordered_set<int> processedSet;
+
+  double calculateBestEstimation(int currentCapacity)
   {
-    vector<Item> sortedItems = items;
-    sort(sortedItems.begin(), sortedItems.end(), compareByValuePerWeight);
     double totalValue = 0;
-    int totalWeight = 0;
     for (int i = 0; i < sortedItems.size(); ++i)
     {
+      if (processedSet.find(sortedItems[i].id) != processedSet.end())
+      {
+        continue;
+      }
       if (sortedItems[i].weight <= currentCapacity)
       {
         currentCapacity -= sortedItems[i].weight;
-        totalWeight += sortedItems[i].weight;
         totalValue += sortedItems[i].value;
       }
       else
       {
-        totalWeight += currentCapacity;
         totalValue += sortedItems[i].value * (double(currentCapacity) / sortedItems[i].weight);
         break;
       }
     }
-    return totalValue / totalWeight;
+    return totalValue;
   }
 
   void solve(int currentCapacity, int currentItem, int currentTotalValue, 
@@ -494,32 +498,28 @@ private:
       return;
     }
 
-    double itemDensity = double(items[currentItem].value) / items[currentItem].weight;
-
+    processedSet.insert(items[currentItem].id);
     if (items[currentItem].weight <= currentCapacity)
     {
       int nextCapacity = currentCapacity - items[currentItem].weight;
       int nextTotalValue = currentTotalValue + items[currentItem].value;
-      double nextBestExpectedAddition = bestExpectedAddition;
+      double nextBestExpectedAddition = calculateBestEstimation(nextCapacity);
       currentTakenList->push_back(items[currentItem].id);
-      if (itemDensity > bestDensity)
-      {
-        nextBestExpectedAddition -= items[currentItem].weight * bestDensity;
-      }
 
       solve(nextCapacity, currentItem + 1, nextTotalValue, nextBestExpectedAddition,
             currentTakenList, takenList);
 
       currentTakenList->pop_back();
     }
-    double nextBestExpectedAddition = bestExpectedAddition;
+    double nextBestExpectedAddition = calculateBestEstimation(currentCapacity);
     solve(currentCapacity, currentItem + 1, currentTotalValue, nextBestExpectedAddition,
           currentTakenList, takenList);
+    processedSet.erase(items[currentItem].id);
   }
 
   double bestDensity;
   int currentIteration = 0;
-  const int MAX_ITERATIONS_NUMBER = 100000000;
+  const int MAX_ITERATIONS_NUMBER = 1000000000;
 };
 
 void findBestAnswer(int capacity, const vector<Item>& items, vector<int>* takenList)
@@ -536,7 +536,6 @@ void findBestAnswer(int capacity, const vector<Item>& items, vector<int>* takenL
   // {
   //   solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new RandomShuffleItemsPreprocessor));
   // }
-
   solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
   /* solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new SortItemsByValuePreprocessor)); */
   /* solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new RandomShuffleItemsPreprocessor)); */
@@ -545,15 +544,15 @@ void findBestAnswer(int capacity, const vector<Item>& items, vector<int>* takenL
   //   solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new RandomShuffleItemsPreprocessor));
   // }
 
-  // solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
+  solverPairs.push_back(std::make_pair(new SplitKnapsackSolver(2), new RandomShuffleItemsPreprocessor));
+
+  solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
   // solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePreprocessor));
   // solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByWeightPreprocessor));
   // for (int i = 0; i < 10; ++i)
   // {
   //   solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new RandomShuffleItemsPreprocessor));
   // }
-
-  solverPairs.push_back(std::make_pair(new SplitKnapsackSolver(2), new RandomShuffleItemsPreprocessor));
 
   int bestTotalValue = 0;
   for (int i = 0; i < solverPairs.size(); ++i)
@@ -581,7 +580,7 @@ void findBestAnswer(int capacity, const vector<Item>& items, vector<int>* takenL
 void outputAnswer(int capacity, const vector<Item>& items, const vector<int>& takenList)
 {
   int totalValue = calculateValue(capacity, items, takenList);
-  cout << totalValue << " " << 0 << endl;
+  cout << totalValue << " " << 1 << endl;
 
   vector<char> taken(items.size());
   for (const int& id : takenList)
