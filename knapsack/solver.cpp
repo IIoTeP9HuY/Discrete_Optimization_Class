@@ -13,6 +13,8 @@ using std::cin;
 using std::cout;
 using std::endl;
 using std::vector;
+using std::sort;
+using std::string;
 
 struct Item
 {
@@ -24,6 +26,72 @@ bool compareByValuePerWeight(const Item& lhs, const Item& rhs)
 {
   return double(lhs.value) / lhs.weight > double(rhs.value) / rhs.weight;
 }
+
+bool compareByWeight(const Item& lhs, const Item& rhs)
+{
+  return lhs.weight < rhs.weight;
+}
+
+bool compareByValue(const Item& lhs, const Item& rhs)
+{
+  return lhs.value > rhs.value;
+}
+
+class ItemsPreprocessor
+{
+public:
+  virtual vector<Item> preprocess(vector<Item> items) = 0;
+
+  virtual string name() { return "ItemsPreprocessor"; }
+};
+
+class SortItemsByValuePerWeightPreprocessor : public ItemsPreprocessor
+{
+public:
+  vector<Item> preprocess(vector<Item> items)
+  {
+    sort(items.begin(), items.end(), compareByValuePerWeight);
+    return items;
+  }
+
+  string name() { return "SortItemsByValuePerWeightPreprocessor"; }
+};
+
+class SortItemsByWeightPreprocessor : public ItemsPreprocessor
+{
+public:
+  vector<Item> preprocess(vector<Item> items)
+  {
+    sort(items.begin(), items.end(), compareByWeight);
+    return items;
+  }
+
+  string name() { return "SortItemsByWeightPreprocessor"; }
+};
+
+class SortItemsByValuePreprocessor : public ItemsPreprocessor
+{
+public:
+  vector<Item> preprocess(vector<Item> items)
+  {
+    sort(items.begin(), items.end(), compareByValue);
+    return items;
+  }
+
+  string name() { return "SortItemsByValuePreprocessor"; }
+};
+
+class RandomShuffleItemsPreprocessor : public ItemsPreprocessor
+{
+public:
+  vector<Item> preprocess(vector<Item> items)
+  {
+    std::random_shuffle(items.begin(), items.end());
+    return items;
+  }
+
+  string name() { return "RandomShuffleItemsPreprocessor"; }
+};
 
 bool compareById(const Item& lhs, const Item& rhs)
 {
@@ -115,12 +183,38 @@ void printDataStatistics(int capacity, const vector<Item>& items)
   }
 }
 
+int calculateValue(int capacity, const vector<Item>& items, const vector<int>& takenList)
+{
+  int totalWeight = 0;
+  int totalValue = 0;
+  for (const int& id : takenList)
+  {
+    totalWeight += items[id].weight;
+    totalValue += items[id].value;
+  }
+  if (totalWeight > capacity)
+  {
+    throw std::logic_error("totalWeight > capacity");
+  }
+  return totalValue;
+}
+
 class KnapsackSolver
 {
 public:
+  KnapsackSolver(): bestTotalValue(0) {}
+
+  void init(int capacity, const vector<Item>& items, int bestTotalValue)
+  {
+    this->capacity = capacity;
+    this->items.assign(items.begin(), items.end());
+    this->bestTotalValue = bestTotalValue;
+  }
+
   KnapsackSolver(int capacity, const vector<Item>& items): 
     capacity(capacity), 
-    items(items) 
+    items(items),
+    bestTotalValue(0)
   {
   }
 
@@ -128,19 +222,26 @@ public:
   {
   }
 
+  virtual string name() { return "KnapsackSolver"; }
+
   virtual int solve(vector<int>* takenList) = 0;
 
 protected:
   int capacity;
   vector<Item> items;
+  int bestTotalValue;
 };
 
 class DynamicProgrammingKnapsackSolver : public KnapsackSolver
 {
 public:
+  DynamicProgrammingKnapsackSolver() {}
+
   DynamicProgrammingKnapsackSolver(int capacity, const vector<Item>& items): KnapsackSolver(capacity, items)
   {
   }
+
+  virtual string name() { return "DynamicProgrammingKnapsackSolver"; }
 
   int solve(vector<int>* takenList)
   {
@@ -148,8 +249,6 @@ public:
     {
       return 0;
     }
-
-    sort(items.begin(), items.end(), compareByValuePerWeight);
 
     int allowedItemsNumber = items.size();
     if (capacity * 1ll * items.size() > MAX_ALLOWED_PROBLEM_SIZE)
@@ -201,20 +300,22 @@ private:
     return bestPickValues[itemsNumber][capacity];
   }
 
-  const int MAX_ALLOWED_PROBLEM_SIZE = 10000000;
+  const int MAX_ALLOWED_PROBLEM_SIZE = 100000000;
 };
 
 class GreedyKnapsackSolver : public KnapsackSolver
 {
 public:
+  GreedyKnapsackSolver() {}
+
   GreedyKnapsackSolver(int capacity, const vector<Item>& items): KnapsackSolver(capacity, items)
   {
   }
 
+  virtual string name() { return "GreedyKnapsackSolver"; }
+
   int solve(vector<int>* takenList)
   {
-    sort(items.begin(), items.end(), compareByValuePerWeight);
-
     int totalValue = 0;
     for (int i = 0; i < items.size(); ++i)
     {
@@ -229,21 +330,115 @@ public:
   }
 };
 
-int calculateValue(int capacity, const vector<Item>& items, const vector<int>& takenList)
+class BranchAndBoundKnapsackSolver : public KnapsackSolver
 {
-  int totalWeight = 0;
-  int totalValue = 0;
-  for (const int& id : takenList)
+public:
+  BranchAndBoundKnapsackSolver(): currentIteration(0) {}
+
+  BranchAndBoundKnapsackSolver(int capacity, const vector<Item>& items): KnapsackSolver(capacity, items),
+    currentIteration(0)
   {
-    totalWeight += items[id].weight;
-    totalValue += items[id].value;
   }
-  if (totalWeight > capacity)
+
+  virtual string name() { return "BranchAndBoundKnapsackSolver"; }
+
+  int solve(vector<int>* takenList)
   {
-    throw std::logic_error("totalWeight > capacity");
+    bestDensity = calculateBestDensity(capacity);
+    vector<int> currentTakenList;
+    cerr << "Best density: " << bestDensity << endl;
+    cerr << "Best value: " << bestDensity * capacity << endl;
+    solve(capacity, 0, 0, bestDensity * capacity, &currentTakenList, takenList);
+    if (takenList->size() == 0)
+    {
+      return 0;
+    }
+    else
+    {
+      return bestTotalValue;
+    }
   }
-  return totalValue;
-}
+private:
+
+  double calculateBestDensity(int currentCapacity)
+  {
+    vector<Item> sortedItems = items;
+    sort(sortedItems.begin(), sortedItems.end(), compareByValuePerWeight);
+    double totalValue = 0;
+    int totalWeight = 0;
+    for (int i = 0; i < sortedItems.size(); ++i)
+    {
+      if (sortedItems[i].weight <= currentCapacity)
+      {
+        currentCapacity -= sortedItems[i].weight;
+        totalWeight += sortedItems[i].weight;
+        totalValue += sortedItems[i].value;
+      }
+      else
+      {
+        totalWeight += currentCapacity;
+        totalValue += sortedItems[i].value * (double(currentCapacity) / sortedItems[i].weight);
+        break;
+      }
+    }
+    return totalValue / totalWeight;
+  }
+
+  void solve(int currentCapacity, int currentItem, int currentTotalValue, 
+            double bestExpectedAddition,
+            vector<int>* currentTakenList, vector<int>* takenList)
+  {
+    ++currentIteration;
+    if (currentIteration > MAX_ITERATIONS_NUMBER)
+    {
+      return;
+    }
+    // cerr << "currentCapacity " << currentCapacity << endl;
+    // cerr << "currentItem " << currentItem << endl;
+    // cerr << "currentTotalValue " << currentTotalValue << endl;
+    // cerr << "bestExpectedAddition " << bestExpectedAddition << endl;
+    if (currentTotalValue > bestTotalValue)
+    {
+      cerr << "Found better! " << currentTotalValue << endl;
+      bestTotalValue = currentTotalValue;
+      takenList->assign(currentTakenList->begin(), currentTakenList->end());
+    }
+    if (currentTotalValue + bestExpectedAddition <= bestTotalValue)
+    {
+      return;
+    }
+    if (currentItem == items.size())
+    {
+      return;
+    }
+
+    double itemDensity = double(items[currentItem].value) / items[currentItem].weight;
+
+    if (items[currentItem].weight <= currentCapacity)
+    {
+      int nextCapacity = currentCapacity - items[currentItem].weight;
+      int nextTotalValue = currentTotalValue + items[currentItem].value;
+      double nextBestExpectedAddition = bestExpectedAddition;
+      currentTakenList->push_back(items[currentItem].id);
+      if (itemDensity > bestDensity)
+      {
+        nextBestExpectedAddition -= items[currentItem].weight * bestDensity;
+      }
+
+      solve(nextCapacity, currentItem + 1, nextTotalValue, nextBestExpectedAddition,
+            currentTakenList, takenList);
+
+      currentTakenList->pop_back();
+    }
+    double nextBestExpectedAddition = bestExpectedAddition;
+    solve(currentCapacity, currentItem + 1, currentTotalValue, nextBestExpectedAddition,
+          currentTakenList, takenList);
+  }
+
+  double bestDensity;
+  int currentIteration = 0;
+  const int MAX_ITERATIONS_NUMBER = 100000000;
+};
 
 void findBestAnswer(int capacity, const vector<Item>& items, vector<int>* takenList)
 {
@@ -251,28 +446,50 @@ void findBestAnswer(int capacity, const vector<Item>& items, vector<int>* takenL
   cerr << "Finding best answer" << endl;
   cerr << "-------------------" << endl;
 
-  cerr << "GreedyKnapsackSolver started" << endl;
-  GreedyKnapsackSolver greedySolver(capacity, items);
-  vector<int> greedyTakenList;
-  int greedyTotalValue = greedySolver.solve(&greedyTakenList);
-  cerr << "GreedyKnapsackSolver finished" << endl << endl;
+  vector< std::pair<KnapsackSolver*, ItemsPreprocessor*> > solverPairs;
 
-  cerr << "DynamicProgrammingKnapsackSolver started" << endl;
-  DynamicProgrammingKnapsackSolver dpSolver(capacity, items);
-  vector<int> dpTakenList;
-  int dpTotalValue = dpSolver.solve(&dpTakenList);
-  cerr << "DynamicProgrammingKnapsackSolver finished" << endl << endl;
-
-  cerr << "Greedy total value: " << greedyTotalValue << endl;
-  cerr << "Dynamic programming total value: " << dpTotalValue << endl;
-
-  if (greedyTotalValue > dpTotalValue)
+  solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
+  solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new SortItemsByValuePreprocessor));
+  for (int i = 0; i < 10; ++i)
   {
-    takenList->assign(greedyTakenList.begin(), greedyTakenList.end());
+    solverPairs.push_back(std::make_pair(new GreedyKnapsackSolver, new RandomShuffleItemsPreprocessor));
   }
-  else
+
+  solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
+  solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new SortItemsByValuePreprocessor));
+  for (int i = 0; i < 10; ++i)
   {
-    takenList->assign(dpTakenList.begin(), dpTakenList.end());
+    solverPairs.push_back(std::make_pair(new DynamicProgrammingKnapsackSolver, new RandomShuffleItemsPreprocessor));
+  }
+
+  solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePerWeightPreprocessor));
+  solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByValuePreprocessor));
+  solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new SortItemsByWeightPreprocessor));
+  for (int i = 0; i < 10; ++i)
+  {
+    solverPairs.push_back(std::make_pair(new BranchAndBoundKnapsackSolver, new RandomShuffleItemsPreprocessor));
+  }
+
+  int bestTotalValue = 0;
+  for (int i = 0; i < solverPairs.size(); ++i)
+  {
+    KnapsackSolver* solver = solverPairs[i].first;
+    ItemsPreprocessor* preprocessor = solverPairs[i].second;
+
+    cerr << "(" << solver->name() << ", " << preprocessor->name() << ") started" << endl;
+
+    vector<int> solverTakenList;
+    solver->init(capacity, preprocessor->preprocess(items), bestTotalValue);
+    int solverTotalValue = solver->solve(&solverTakenList);
+
+    if (solverTotalValue > bestTotalValue)
+    {
+      bestTotalValue = solverTotalValue;
+      takenList->assign(solverTakenList.begin(), solverTakenList.end());
+    }
+
+    cerr << "Total value: " << solverTotalValue << endl;
+    cerr << "(" << solver->name() << ", " << preprocessor->name() << ") finished" << endl << endl;
   }
 }
 
