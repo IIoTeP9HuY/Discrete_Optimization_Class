@@ -1,11 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-
-def solveIt(inputData):
-    # Modify this code to run your optimization algorithm
-
-    # parse the input
+def processInput(inputData):
     lines = inputData.split('\n')
 
     firstLine = lines[0].split()
@@ -24,8 +20,16 @@ def solveIt(inputData):
 
     items = len(values)
 
-    # a trivial greedy algorithm for filling the knapsack
-    # it takes items in-order until the knapsack is full
+    return (items, capacity, values, weights)
+
+
+def stringifyAnswer(value, taken):
+    outputData = str(value) + ' ' + str(0) + '\n'
+    outputData += ' '.join(map(str, taken))
+    return outputData
+    
+
+def solveCase(items, capacity, values, weights):
     value = 0
     weight = 0
     taken = []
@@ -38,10 +42,21 @@ def solveIt(inputData):
         else:
             taken.append(0)
 
+    return (value, taken) 
+
+
+def solveIt(inputData):
+    # Modify this code to run your optimization algorithm
+
+    # parse the input
+    (items, capacity, values, weights) = processInput(inputData)
+
+    # a trivial greedy algorithm for filling the knapsack
+    # it takes items in-order until the knapsack is full
+    (value, taken) = solveCase(items, capacity, values, weights)
+
     # prepare the solution in the specified output format
-    outputData = str(value) + ' ' + str(0) + '\n'
-    outputData += ' '.join(map(str, taken))
-    return outputData
+    return stringifyAnswer(value, taken)
 
 
 import sys
