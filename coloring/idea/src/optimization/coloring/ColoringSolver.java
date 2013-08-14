@@ -1,6 +1,5 @@
 package optimization.coloring;
 
-import data_structures.Counter;
 import data_structures.graph.Graph;
 import utils.InputReader;
 import utils.OutputWriter;
@@ -8,7 +7,7 @@ import utils.OutputWriter;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
+import java.util.Comparator;
 
 /**
  * User: iiotep9huy
@@ -20,7 +19,7 @@ public class ColoringSolver {
 
 	static InputReader in;
 	static OutputWriter out;
-	final static int DEFAULF_ITERATIONS_NUMBER = 100000000;
+	final static int DEFAULF_ITERATIONS_NUMBER = 20000000;
 
 	/**
 	 * The main class
@@ -65,8 +64,15 @@ public class ColoringSolver {
 		return order;
 	}
 
-	static ArrayList<Integer> sortedByDegreeOrder(Graph graph) {
+	static ArrayList<Integer> sortedByDegreeOrder(final Graph graph) {
 		ArrayList<Integer> order = generateSimpleOrder(graph.incidenceList.size());
+		Collections.sort(order, new Comparator<Integer>() {
+			@Override
+			public int compare(Integer o1, Integer o2) {
+				return Integer.compare(-graph.incidenceList.get(o1).size(), -graph.incidenceList.get(o2).size());
+			}
+		});
+		return order;
 	}
 
 	/**
@@ -82,7 +88,8 @@ public class ColoringSolver {
 			graph.addEdge(firstVertex, secondVertex);
 		}
 
-		ArrayList<Integer> vertiocesOrder = generateSimpleOrder(V);
+//		ArrayList<Integer> verticesOrder = generateSimpleOrder(V);
+		ArrayList<Integer> verticesOrder = sortedByDegreeOrder(graph);
 
 		ArrayList<Integer> colors = new ArrayList<Integer>(V);
 		while (colors.size() < V) {
@@ -93,16 +100,46 @@ public class ColoringSolver {
 
 		ArrayList<Integer> bestColors = new ArrayList<Integer>();
 		int bestColorsNumber = V + 1;
-		int iterationsNumber = (int) Math.ceil(DEFAULF_ITERATIONS_NUMBER / (E + V + 5)) + 1;
+		int iterationsNumber = 10;
 		for (int i = 0; i < iterationsNumber; ++i) {
-			Collections.shuffle(verticesOrder);
-			ArrayList<Integer> newColors = greedyColorer.color(graph, verticesOrder, colors);
-			int newColorsNumber = findColorsNumber(newColors);
+			greedyColorer.setBestColorsNumber(bestColorsNumber);
+			try {
+				ArrayList<Integer> newColors = greedyColorer.color(graph, verticesOrder, colors);
+				int newColorsNumber = findColorsNumber(newColors);
 
-			if (newColorsNumber < bestColorsNumber) {
-				System.err.println("Found better: " + newColorsNumber);
-				bestColorsNumber = newColorsNumber;
-				bestColors = newColors;
+				if (newColorsNumber < bestColorsNumber) {
+					System.err.println("Found better: " + newColorsNumber);
+					bestColorsNumber = newColorsNumber;
+					bestColors = newColors;
+				}
+			} catch (WorseColoringException e) {
+			}
+			Collections.shuffle(verticesOrder);
+		}
+
+		BranchAndPruneColorer branchAndPruneColorer = new BranchAndPruneColorer();
+		while (true) {
+			try {
+				ArrayList<Integer> branchAndPruneColors = branchAndPruneColorer.color(graph, bestColorsNumber - 1);
+				bestColors = branchAndPruneColors;
+				--bestColorsNumber;
+				System.err.println("BP. Found better: " + bestColorsNumber);
+			} catch (ImpossibleColoringException e) {
+				break;
+			}
+		}
+
+		int CRIterationsNumber = (int) Math.ceil(DEFAULF_ITERATIONS_NUMBER / (E + V + 5)) + 1;
+		System.err.println("IT: " + CRIterationsNumber);
+		ConflictResolvingColorer conflictResolvingColorer = new ConflictResolvingColorer();
+		while (true) {
+			try {
+				ArrayList<Integer> conflictResolverColors = conflictResolvingColorer.color(graph, bestColorsNumber - 1, CRIterationsNumber);
+				bestColors = conflictResolverColors;
+				--bestColorsNumber;
+				System.err.println("CR. Found better: " + bestColorsNumber);
+			} catch (ImpossibleColoringException e) {
+				break;
 			}
 		}
 

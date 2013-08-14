@@ -4,7 +4,6 @@ import data_structures.Counter;
 import data_structures.graph.Graph;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -14,6 +13,10 @@ import java.util.List;
  * Project: Coloring
  */
 public class GreedyColorer {
+	public void setBestColorsNumber(int bestColorsNumber) {
+		this.bestColorsNumber = bestColorsNumber;
+	}
+
 	public ArrayList<Integer> color(Graph graph, List<Integer> colorOrder, ArrayList<Integer> initialColors) throws Exception {
 		ArrayList<Integer> colors = new ArrayList<Integer>();
 		for (int i = 0; i < initialColors.size(); ++i) {
@@ -33,9 +36,14 @@ public class GreedyColorer {
 				if (availableColor == -1) {
 					throw new Exception("Can't paint vertex " + source);
 				}
+				if (bestColorsNumber != -1 && availableColor >= bestColorsNumber) {
+					throw new WorseColoringException();
+				}
 				colors.set(source, availableColor);
 			}
 		}
 		return colors;
 	}
+
+	private int bestColorsNumber = -1;
 }

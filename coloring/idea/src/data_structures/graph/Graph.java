@@ -1,7 +1,6 @@
 package data_structures.graph;
 
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * User: iiotep9huy
@@ -15,6 +14,14 @@ public class Graph {
 		while (incidenceList.size() < verticesNumber) {
 			incidenceList.add(new ArrayList<Integer>());
 		}
+	}
+
+	public int size() {
+		return incidenceList.size();
+	}
+
+	public int vertexDegree(int v) {
+		return incidenceList.get(v).size();
 	}
 
 	public void addEdge(int firstVertex, int secondVertex) {

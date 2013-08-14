@@ -1,7 +1,5 @@
 package data_structures;
 
-import java.util.Collections;
-
 /**
  * User: iiotep9huy
  * Date: 6/30/13
@@ -11,6 +9,7 @@ import java.util.Collections;
 public class Counter {
 	public Counter(int size) {
 		this.size = size;
+		this.zeroesNumber = size;
 		counter = new int[size];
 		clear();
 	}
@@ -26,7 +25,15 @@ public class Counter {
 	}
 
 	public void increment(int value) {
-		++counter[value];
+		if (++counter[value] == 1) {
+			--zeroesNumber;
+		}
+	}
+
+	public void decrement(int value) {
+		if (--counter[value] == 0) {
+			++zeroesNumber;
+		}
 	}
 
 	public int get(int value) {
@@ -34,7 +41,21 @@ public class Counter {
 	}
 
 	public int findFirstZero() {
+		return findFirstZeroAfter(-1);
+	}
+
+	public int findMinimum() {
+		int minPosition = -1;
 		for (int i = 0; i < size; ++i) {
+			if (minPosition == -1 || counter[minPosition] > counter[i])	{
+				minPosition = i;
+			}
+		}
+		return minPosition;
+	}
+
+	public int findFirstZeroAfter(int position) {
+		for (int i = position + 1; i < size; ++i) {
 			if (get(i) == 0) {
 				return i;
 			}
@@ -42,6 +63,11 @@ public class Counter {
 		return -1;
 	}
 
+	public int zeroesNumber() {
+		return zeroesNumber;
+	}
+
+	private int zeroesNumber;
 	private int size;
 	private int[] counter;
 }
