@@ -72,6 +72,20 @@ public class InputReader {
         return res * sgn;
     }
 
+	public double readDouble() {
+		int c = read();
+		while (isSpaceChar(c))
+			c = read();
+
+		StringBuilder stringBuilder = new StringBuilder();
+		do {
+			stringBuilder.append((char) c);
+			c = read();
+		} while (!isSpaceChar(c));
+
+		return Double.parseDouble(stringBuilder.toString());
+	}
+
     public static boolean isSpaceChar(int c) {
         return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == -1;
     }

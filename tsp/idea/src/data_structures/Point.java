@@ -8,7 +8,7 @@ package data_structures;
  */
 public class Point {
 
-	public Point(int x, int y) {
+	public Point(double x, double y) {
 		this.x = x;
 		this.y = y;
 	}
@@ -22,5 +22,5 @@ public class Point {
 		return Math.sqrt((lhs.x - rhs.x) * (lhs.x - rhs.x) + (lhs.y - rhs.y) * (lhs.y - rhs.y));
 	}
 
-	public int x, y;
+	public double x, y;
 }
