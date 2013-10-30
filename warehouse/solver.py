@@ -5,9 +5,6 @@ import math
 import os
 from subprocess import Popen, PIPE
 
-def length(point1, point2):
-    return math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
-
 def solveIt(inputData):
 
     # Writes the inputData to a temporay file
@@ -23,7 +20,7 @@ def solveIt(inputData):
                         'java',
 
                         '-Xmx5g',
-                        '-cp', 'idea/out/production/TSP/', 'optimization.tsp.TSPSolver', tmpFileName
+                        '-cp', 'idea/out/production/Warehouse/', 'optimization.warehouse.WarehouseSolver', tmpFileName
                     ],
                     stdout=PIPE)
     (stdout, stderr) = process.communicate()
