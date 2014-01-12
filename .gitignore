@@ -4,3 +4,4 @@
 *.swp
 *.class
 data/
+.idea/
